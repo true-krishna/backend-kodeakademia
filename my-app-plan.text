@@ -1,0 +1,22 @@
+About this course:
+  - A learning platform like udemy
+  - Only one user can create course, platform owner
+  - Regular user as learner or student
+
+Regular user feature:
+  - See all course
+  - See detail course
+  - Buy a course
+  - Mark as complete some course
+Platform ownwer
+  - CRUD course
+  - See Statistic of course
+  - See statictic of users
+  - Manage users
+
+Technology will use:
+  - Golang
+  - User login with google Oauth
+  - Postgre for database
+  - Using clean architecture
+  - Rest API
