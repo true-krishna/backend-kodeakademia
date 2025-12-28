@@ -1,175 +1,190 @@
-# Kodeakademia — Backend
+[![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/golang-migrate/migrate/ci.yaml?branch=master)](https://github.com/golang-migrate/migrate/actions/workflows/ci.yaml?query=branch%3Amaster)
+[![GoDoc](https://pkg.go.dev/badge/github.com/golang-migrate/migrate)](https://pkg.go.dev/github.com/golang-migrate/migrate/v4)
+[![Coverage Status](https://img.shields.io/coveralls/github/golang-migrate/migrate/master.svg)](https://coveralls.io/github/golang-migrate/migrate?branch=master)
+[![packagecloud.io](https://img.shields.io/badge/deb-packagecloud.io-844fec.svg)](https://packagecloud.io/golang-migrate/migrate?filter=debs)
+[![Docker Pulls](https://img.shields.io/docker/pulls/migrate/migrate.svg)](https://hub.docker.com/r/migrate/migrate/)
+![Supported Go Versions](https://img.shields.io/badge/Go-1.19%2C%201.20-lightgrey.svg)
+[![GitHub Release](https://img.shields.io/github/release/golang-migrate/migrate.svg)](https://github.com/golang-migrate/migrate/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/golang-migrate/migrate/v4)](https://goreportcard.com/report/github.com/golang-migrate/migrate/v4)
 
-This repository contains the backend for a simple learning platform (a Udemy-like app). The project uses Go, follows Clean Architecture principles, and is developed using TDD (Red-Green-Refactor).
+# migrate
 
-This README explains the repository layout, how to run the app locally, how to run migrations and seeds, and the development process (including TDD rules and how features are broken down).
+__Database migrations written in Go. Use as [CLI](#cli-usage) or import as [library](#use-in-your-go-project).__
 
-## Status
+* Migrate reads migrations from [sources](#migration-sources)
+   and applies them in correct order to a [database](#databases).
+* Drivers are "dumb", migrate glues everything together and makes sure the logic is bulletproof.
+   (Keeps the drivers lightweight, too.)
+* Database drivers don't assume things or try to correct user input. When in doubt, fail.
 
-- Feature 0 (project scaffold + health check): implemented.
-- Feature 1 (Google OAuth 2.0 login): planned in `plan.md` and ready to implement.
+Forked from [mattes/migrate](https://github.com/mattes/migrate)
 
-See `plan.md` for the full feature-by-feature plan and development TODOs.
+## Databases
 
-## Technology Stack
+Database drivers run migrations. [Add a new database?](database/driver.go)
 
-- Language: Go (1.20+)
-- Web framework: Echo (`github.com/labstack/echo/v4`)
-- Database: PostgreSQL
-- DB driver: `pgx` recommended (`github.com/jackc/pgx/v5`)
-- Migrations: `golang-migrate/migrate`
-- OAuth2: `golang.org/x/oauth2` (Google OAuth 2.0)
-- JWT: `github.com/golang-jwt/jwt/v5`
-- Validation: `github.com/go-playground/validator/v10`
-- Logging: `go.uber.org/zap`
-- Testing: Go `testing`, `github.com/stretchr/testify`
+* [PostgreSQL](database/postgres)
+* [PGX v4](database/pgx)
+* [PGX v5](database/pgx/v5)
+* [Redshift](database/redshift)
+* [Ql](database/ql)
+* [Cassandra](database/cassandra)
+* [SQLite](database/sqlite)
+* [SQLite3](database/sqlite3) ([todo #165](https://github.com/mattes/migrate/issues/165))
+* [SQLCipher](database/sqlcipher)
+* [MySQL/ MariaDB](database/mysql)
+* [Neo4j](database/neo4j)
+* [MongoDB](database/mongodb)
+* [CrateDB](database/crate) ([todo #170](https://github.com/mattes/migrate/issues/170))
+* [Shell](database/shell) ([todo #171](https://github.com/mattes/migrate/issues/171))
+* [Google Cloud Spanner](database/spanner)
+* [CockroachDB](database/cockroachdb)
+* [YugabyteDB](database/yugabytedb)
+* [ClickHouse](database/clickhouse)
+* [Firebird](database/firebird)
+* [MS SQL Server](database/sqlserver)
 
-## Repository layout (important paths)
+### Database URLs
 
-- `cmd/server/` — application entrypoint (`main.go`)
-- `internal/` — private application code
-	- `internal/domain/` — domain entities and repository interfaces
-	- `internal/usecase/` — business logic (usecases)
-	- `internal/adapters/` — adapters (Postgres, OAuth, etc.)
-	- `internal/transport/httptransport/` — HTTP handlers and middleware
-- `migrations/` — SQL migrations and seed files
-- `plan.md` — development plan, feature list, and TDD rules
+Database connection strings are specified via URLs. The URL format is driver dependent but generally has the form: `dbdriver://username:password@host:port/dbname?param1=true&param2=false`
 
-## Environment variables
+Any [reserved URL characters](https://en.wikipedia.org/wiki/Percent-encoding#Percent-encoding_reserved_characters) need to be escaped. Note, the `%` character also [needs to be escaped](https://en.wikipedia.org/wiki/Percent-encoding#Percent-encoding_the_percent_character)
 
-Use `.env` for local development (the repo includes `.env.example`). Important vars:
+Explicitly, the following characters need to be escaped:
+`!`, `#`, `$`, `%`, `&`, `'`, `(`, `)`, `*`, `+`, `,`, `/`, `:`, `;`, `=`, `?`, `@`, `[`, `]`
 
-- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
-- `DATABASE_URL` / `MIGRATE_DATABASE_URL` — convenience URL for migration tools
-- `APP_BASE_URL` — e.g. `http://localhost:8080`
-- `OAUTH_REDIRECT_URI` — e.g. `http://localhost:8080/auth/google/callback`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-- `JWT_SECRET` — generate a secure random secret (`openssl rand -hex 32`)
-- `TEST_DB_*` — optional test DB creds for integration tests
-
-Note: If your DB password contains special characters (for example `@`), you must URL-encode the password when you set `DATABASE_URL`/`MIGRATE_DATABASE_URL`.
-
-## Getting started (development)
-
-Prereqs:
-
-- Go 1.20+
-- Docker (optional for Postgres)
-- `psql` or Adminer (Adminer is included in `docker-compose.yml` if you want a UI)
-
-1. Copy `.env.example` to `.env` and fill values (or ensure your environment provides these variables).
-
-2. Start Postgres (choose one):
-
-- Option A — Docker (quick start using `docker run`):
+It's easiest to always run the URL parts of your DB connection URL (e.g. username, password, etc) through an URL encoder. See the example Python snippets below:
 
 ```bash
-docker run -d --name kodeakademia-postgres -p 5432:5432 \
-	-e POSTGRES_PASSWORD=secret -e POSTGRES_USER=postgres postgres:15
-
-docker exec -it kodeakademia-postgres psql -U postgres -c "CREATE USER app_user WITH PASSWORD 'secret';"
-docker exec -it kodeakademia-postgres psql -U postgres -c "CREATE DATABASE app_db OWNER app_user;"
+$ python3 -c 'import urllib.parse; print(urllib.parse.quote(input("String to encode: "), ""))'
+String to encode: FAKEpassword!#$%&'()*+,/:;=?@[]
+FAKEpassword%21%23%24%25%26%27%28%29%2A%2B%2C%2F%3A%3B%3D%3F%40%5B%5D
+$ python2 -c 'import urllib; print urllib.quote(raw_input("String to encode: "), "")'
+String to encode: FAKEpassword!#$%&'()*+,/:;=?@[]
+FAKEpassword%21%23%24%25%26%27%28%29%2A%2B%2C%2F%3A%3B%3D%3F%40%5B%5D
+$
 ```
 
-- Option B — Docker Compose (predefined):
+## Migration Sources
+
+Source drivers read migrations from local or remote sources. [Add a new source?](source/driver.go)
+
+* [Filesystem](source/file) - read from filesystem
+* [io/fs](source/iofs) - read from a Go [io/fs](https://pkg.go.dev/io/fs#FS)
+* [Go-Bindata](source/go_bindata) - read from embedded binary data ([jteeuwen/go-bindata](https://github.com/jteeuwen/go-bindata))
+* [pkger](source/pkger) - read from embedded binary data ([markbates/pkger](https://github.com/markbates/pkger))
+* [GitHub](source/github) - read from remote GitHub repositories
+* [GitHub Enterprise](source/github_ee) - read from remote GitHub Enterprise repositories
+* [Bitbucket](source/bitbucket) - read from remote Bitbucket repositories
+* [Gitlab](source/gitlab) - read from remote Gitlab repositories
+* [AWS S3](source/aws_s3) - read from Amazon Web Services S3
+* [Google Cloud Storage](source/google_cloud_storage) - read from Google Cloud Platform Storage
+
+## CLI usage
+
+* Simple wrapper around this library.
+* Handles ctrl+c (SIGINT) gracefully.
+* No config search paths, no config files, no magic ENV var injections.
+
+__[CLI Documentation](cmd/migrate)__
+
+### Basic usage
 
 ```bash
-docker-compose up -d postgres adminer
+$ migrate -source file://path/to/migrations -database postgres://localhost:5432/database up 2
 ```
 
-3. Run migrations (example with `migrate`):
+### Docker usage
 
 ```bash
-export DB_USER=app_user DB_PASSWORD=secret DB_NAME=app_db DB_HOST=localhost DB_PORT=5432
-migrate -path ./migrations -database "postgres://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME?sslmode=disable" up
+$ docker run -v {{ migration dir }}:/migrations --network host migrate/migrate
+    -path=/migrations/ -database postgres://localhost:5432/database up 2
 ```
 
-4. (Optional) Seed development data:
+## Use in your Go project
+
+* API is stable and frozen for this release (v3 & v4).
+* Uses [Go modules](https://golang.org/cmd/go/#hdr-Modules__module_versions__and_more) to manage dependencies.
+* To help prevent database corruptions, it supports graceful stops via `GracefulStop chan bool`.
+* Bring your own logger.
+* Uses `io.Reader` streams internally for low memory overhead.
+* Thread-safe and no goroutine leaks.
+
+__[Go Documentation](https://pkg.go.dev/github.com/golang-migrate/migrate/v4)__
+
+```go
+import (
+    "github.com/golang-migrate/migrate/v4"
+    _ "github.com/golang-migrate/migrate/v4/database/postgres"
+    _ "github.com/golang-migrate/migrate/v4/source/github"
+)
+
+func main() {
+    m, err := migrate.New(
+        "github://mattes:personal-access-token@mattes/migrate_test",
+        "postgres://localhost:5432/database?sslmode=enable")
+    m.Steps(2)
+}
+```
+
+Want to use an existing database client?
+
+```go
+import (
+    "database/sql"
+    _ "github.com/lib/pq"
+    "github.com/golang-migrate/migrate/v4"
+    "github.com/golang-migrate/migrate/v4/database/postgres"
+    _ "github.com/golang-migrate/migrate/v4/source/file"
+)
+
+func main() {
+    db, err := sql.Open("postgres", "postgres://localhost:5432/database?sslmode=enable")
+    driver, err := postgres.WithInstance(db, &postgres.Config{})
+    m, err := migrate.NewWithDatabaseInstance(
+        "file:///migrations",
+        "postgres", driver)
+    m.Up() // or m.Step(2) if you want to explicitly set the number of migrations to run
+}
+```
+
+## Getting started
+
+Go to [getting started](GETTING_STARTED.md)
+
+## Tutorials
+
+* [CockroachDB](database/cockroachdb/TUTORIAL.md)
+* [PostgreSQL](database/postgres/TUTORIAL.md)
+
+(more tutorials to come)
+
+## Migration files
+
+Each migration has an up and down migration. [Why?](FAQ.md#why-two-separate-files-up-and-down-for-a-migration)
 
 ```bash
-psql "postgres://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME" -f migrations/seeds/seed_courses.sql
+1481574547_create_users_table.up.sql
+1481574547_create_users_table.down.sql
 ```
 
-5. Run the server (Feature 0 scaffold):
+[Best practices: How to write migrations.](MIGRATIONS.md)
 
-```bash
-go mod download
-make run
-# or
-go run ./cmd/server
-```
+## Versions
 
-6. Verify health endpoint:
+Version | Supported? | Import | Notes
+--------|------------|--------|------
+**master** | :white_check_mark: | `import "github.com/golang-migrate/migrate/v4"` | New features and bug fixes arrive here first |
+**v4** | :white_check_mark: | `import "github.com/golang-migrate/migrate/v4"` | Used for stable releases |
+**v3** | :x: | `import "github.com/golang-migrate/migrate"` (with package manager) or `import "gopkg.in/golang-migrate/migrate.v3"` (not recommended) | **DO NOT USE** - No longer supported |
 
-```bash
-curl http://localhost:8080/health
-# {"status":"ok"}
-```
+## Development and Contributing
 
-## Running tests
+Yes, please! [`Makefile`](Makefile) is your friend,
+read the [development guide](CONTRIBUTING.md).
 
-Unit tests (fast):
+Also have a look at the [FAQ](FAQ.md).
 
-```bash
-make test
-```
+---
 
-Integration tests:
-
-- Integration tests require a running Postgres instance. Use the `TEST_DB_*` vars in `.env` to point to a test database and run migrations/seeds against it before executing integration tests.
-
-## Development Process (TDD)
-
-All development follows TDD (Red-Green-Refactor):
-
-1. Red — write a failing unit test that specifies the required behavior.
-2. Green — implement the smallest amount of code to make the test pass.
-3. Refactor — improve design and clean up while keeping tests green.
-
-Practical rules:
-
-- Unit tests must be fast and isolated (mock DB and external services).
-- Integration tests validate end-to-end behaviors with a real/test DB.
-- Each commit adding functionality must include tests demonstrating it.
-
-## OAuth 2.0 (Google) notes
-
-To enable Google OAuth 2.0 login:
-
-1. Create an OAuth 2.0 Client ID in Google Cloud Console.
-2. Add the redirect URI (for local development): `http://localhost:8080/auth/google/callback` and set `OAUTH_REDIRECT_URI` accordingly.
-3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`.
-
-During development you can either use real Google credentials (easy but requires browser redirect) or mock the token/profile endpoints in tests using `httptest.Server`.
-
-## Migrations & Seeding
-
-- Migrations live in `migrations/` as plain SQL files (`0001_init.up.sql` / `.down.sql`).
-- Seeds are in `migrations/seeds/`.
-- Use `golang-migrate` CLI or Docker image to apply migrations in CI or locally.
-
-## Linting & Formatting
-
-- Use `gofmt` / `gofumpt` to format code.
-- Use `golangci-lint` to run static analysis checks.
-
-## Feature plan and workflow
-
-The full feature plan (sequential features and per-feature micro-steps) is in `plan.md`. Work proceeds feature-by-feature in TDD cycles; Feature 0 is scaffolded and complete.
-
-Feature examples:
-
-- Feature 0 — Project scaffold & health check (done)
-- Feature 1 — Google OAuth 2.0 login (planned)
-- Feature 2 — Course listing (public endpoint)
-- Feature 3 — Course detail (public endpoint)
-
-## Contributing
-
-- Fork and open a pull request with focused changes and tests.
-- Follow the Red-Green-Refactor workflow and keep commits small and atomic.
-- Run `go test ./...` and `golangci-lint run` before submitting PRs.
-
-## Contact / Questions
-
-If you need me to scaffold additional features or wire OAuth tests, tell me which TODO to start and I will implement the Red step (add failing tests) then the Green (implementation).
+Looking for alternatives? [https://awesome-go.com/#database](https://awesome-go.com/#database).
