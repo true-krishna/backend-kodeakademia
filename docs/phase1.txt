@@ -1,0 +1,347 @@
+// ============================================
+// PHASE 1 MVP ENTITIES
+// Features: Google login, Browse courses, Course detail, 
+// Purchase with coupon, Watch lessons, Track progress, Certificate
+// ============================================
+
+// ============================================
+// 1. USER ENTITY (Google OAuth)
+// ============================================
+interface User {
+  id: string;
+  googleId: string; // unique ID from Google OAuth
+  email: string;
+  name: string;
+  profileImage?: string; // from Google profile
+  role: 'ADMIN' | 'STUDENT'; // only ADMIN can create courses
+  isActive: boolean;
+  createdAt: Date;
+  lastLoginAt: Date;
+}
+
+// ============================================
+// 2. COURSE ENTITY (Browse & Detail)
+// ============================================
+interface Course {
+  id: string;
+  title: string;
+  slug: string; // URL-friendly: mastering-nuxt-course
+  description: string; // short description for listing
+  fullDescription: string; // full description for course detail page
+  thumbnailUrl: string;
+  promoVideoUrl?: string; // preview video (optional)
+  
+  // Pricing
+  price: number;
+  discountPrice?: number; // if null, no discount
+  currency: string; // e.g., "USD", "IDR"
+  
+  // Course metadata
+  level: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+  language: string; // e.g., "English", "Indonesian"
+  
+  // Auto-calculated stats
+  totalDuration: number; // total minutes of all lessons
+  totalLessons: number; // count of all lessons
+  totalSections: number; // count of all sections
+  totalStudents: number; // count of enrollments
+  
+  // Status
+  status: 'DRAFT' | 'PUBLISHED';
+  isFeatured: boolean; // show on homepage featured section
+  
+  // What you'll learn (JSON array of strings)
+  learningPoints: string[]; // ["Build modern web apps", "Master Nuxt.js"]
+  
+  createdAt: Date;
+  updatedAt: Date;
+  publishedAt?: Date;
+}
+
+// ============================================
+// 3. SECTION ENTITY (Course Structure)
+// ============================================
+interface Section {
+  id: string;
+  courseId: string;
+  title: string; // e.g., "Getting Started with Nuxt"
+  description?: string; // optional section description
+  sortOrder: number; // 1, 2, 3... for ordering
+  
+  // Auto-calculated
+  totalLessons: number;
+  totalDuration: number; // in minutes
+  
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ============================================
+// 4. LESSON ENTITY (Video Content)
+// ============================================
+interface Lesson {
+  id: string;
+  sectionId: string;
+  title: string; // e.g., "What is Nuxt.js?"
+  description?: string; // lesson overview
+  
+  // Video content
+  videoUrl: string; // URL to video file or stream
+  videoDuration: number; // in seconds
+  thumbnailUrl?: string; // video thumbnail
+  
+  sortOrder: number; // order within section
+  isFree: boolean; // allow preview for non-enrolled users
+  
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ============================================
+// 5. ENROLLMENT (Course Access)
+// ============================================
+interface Enrollment {
+  id: string;
+  userId: string;
+  courseId: string;
+  
+  // Progress tracking
+  progressPercentage: number; // 0-100 (calculated from completed lessons)
+  completedLessonsCount: number;
+  
+  // Timestamps
+  enrolledAt: Date;
+  lastAccessedAt: Date;
+  completedAt?: Date; // set when progressPercentage reaches 100
+  
+  // Status
+  status: 'ACTIVE' | 'COMPLETED';
+}
+
+// ============================================
+// 6. LESSON PROGRESS (Tracking)
+// ============================================
+interface LessonProgress {
+  id: string;
+  userId: string;
+  lessonId: string;
+  enrollmentId: string; // link to enrollment
+  
+  // Progress data
+  isCompleted: boolean;
+  watchedDuration: number; // seconds watched (for resume feature)
+  completionPercentage: number; // 0-100 based on watched duration
+  
+  // Timestamps
+  firstWatchedAt: Date;
+  lastWatchedAt: Date;
+  completedAt?: Date; // set when isCompleted = true
+}
+
+// ============================================
+// 7. ORDER (Purchase & Payment)
+// ============================================
+interface Order {
+  id: string;
+  orderNumber: string; // e.g., "ORD-20241229-001234"
+  userId: string;
+  courseId: string;
+  
+  // Pricing breakdown
+  originalPrice: number;
+  discountAmount: number; // 0 if no discount
+  finalPrice: number; // originalPrice - discountAmount
+  currency: string;
+  
+  // Coupon (optional)
+  couponId?: string;
+  couponCode?: string;
+  
+  // Payment info
+  paymentMethod: string; // "stripe", "paypal", "midtrans", etc.
+  paymentStatus: 'PENDING' | 'COMPLETED' | 'FAILED';
+  transactionId?: string; // from payment gateway
+  paymentProof?: string; // URL to payment proof (for manual payment)
+  
+  // Timestamps
+  createdAt: Date;
+  paidAt?: Date; // when payment completed
+  expiresAt?: Date; // for pending payments (e.g., 24 hours)
+}
+
+// ============================================
+// 8. COUPON (Discount Codes)
+// ============================================
+interface Coupon {
+  id: string;
+  code: string; // e.g., "NEWYEAR2024", "BLACKFRIDAY"
+  description?: string; // e.g., "New Year 2024 Sale"
+  
+  // Discount
+  discountType: 'PERCENTAGE' | 'FIXED'; // 20% or $10
+  discountValue: number; // 20 (for 20%) or 10 (for $10)
+  
+  // Usage limits
+  maxUsage: number; // total times coupon can be used (0 = unlimited)
+  usedCount: number; // current usage count
+  maxUsagePerUser: number; // times a user can use it (default: 1)
+  
+  // Validity
+  validFrom: Date;
+  validUntil: Date;
+  isActive: boolean;
+  
+  // Course restrictions (optional)
+  applicableCourseIds?: string[]; // empty array = all courses
+  minimumPurchase?: number; // minimum order amount
+  
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ============================================
+// 9. COUPON USAGE (Track individual usage)
+// ============================================
+interface CouponUsage {
+  id: string;
+  couponId: string;
+  userId: string;
+  orderId: string;
+  
+  discountAmount: number; // actual discount applied
+  
+  usedAt: Date;
+}
+
+// ============================================
+// 10. CERTIFICATE (Course Completion)
+// ============================================
+interface Certificate {
+  id: string;
+  userId: string;
+  courseId: string;
+  enrollmentId: string;
+  
+  // Certificate details
+  certificateNumber: string; // e.g., "CERT-20241229-001234"
+  certificateUrl: string; // URL to generated PDF/image
+  verificationCode: string; // for public verification
+  
+  // Student info (snapshot at time of completion)
+  studentName: string;
+  courseName: string;
+  completionDate: Date;
+  
+  issuedAt: Date;
+}
+
+// ============================================
+// 11. USER ACTIVITY (Simple Analytics)
+// ============================================
+interface UserActivity {
+  id: string;
+  userId: string;
+  activityType: 
+    | 'LOGIN' 
+    | 'COURSE_VIEW' 
+    | 'LESSON_START'
+    | 'LESSON_COMPLETE' 
+    | 'COURSE_PURCHASE'
+    | 'COURSE_COMPLETE'
+    | 'CERTIFICATE_DOWNLOAD';
+  
+  // Related entities (optional, depends on activity type)
+  courseId?: string;
+  lessonId?: string;
+  orderId?: string;
+  
+  // Additional data (flexible JSON)
+  metadata?: {
+    ipAddress?: string;
+    userAgent?: string;
+    referrer?: string;
+    // any other tracking data
+  };
+  
+  createdAt: Date;
+}
+
+// ============================================
+// DATABASE RELATIONSHIPS
+// ============================================
+/*
+RELATIONSHIPS:
+
+User 1 -> * Enrollment -> 1 Course
+User 1 -> * LessonProgress -> 1 Lesson
+User 1 -> * Order -> 1 Course
+User 1 -> * Certificate -> 1 Course
+User 1 -> * UserActivity
+User 1 -> * CouponUsage -> 1 Coupon
+
+Course 1 -> * Section
+Section 1 -> * Lesson
+
+Enrollment 1 -> * LessonProgress
+Enrollment 1 -> 1 Certificate (when completed)
+
+Order * -> 1 Coupon (optional)
+Coupon 1 -> * CouponUsage
+
+INDEXES (for better query performance):
+- User: googleId (unique), email (unique)
+- Course: slug (unique), status, isFeatured
+- Section: courseId, sortOrder
+- Lesson: sectionId, sortOrder
+- Enrollment: userId, courseId, status
+- LessonProgress: userId, lessonId, enrollmentId
+- Order: userId, courseId, orderNumber (unique), paymentStatus
+- Coupon: code (unique), isActive
+- Certificate: userId, courseId, certificateNumber (unique), verificationCode (unique)
+- UserActivity: userId, activityType, createdAt
+*/
+
+// ============================================
+// ENUMS (for type safety)
+// ============================================
+enum UserRole {
+  ADMIN = 'ADMIN',
+  STUDENT = 'STUDENT'
+}
+
+enum CourseLevel {
+  BEGINNER = 'BEGINNER',
+  INTERMEDIATE = 'INTERMEDIATE',
+  ADVANCED = 'ADVANCED'
+}
+
+enum CourseStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED'
+}
+
+enum EnrollmentStatus {
+  ACTIVE = 'ACTIVE',
+  COMPLETED = 'COMPLETED'
+}
+
+enum PaymentStatus {
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED'
+}
+
+enum DiscountType {
+  PERCENTAGE = 'PERCENTAGE',
+  FIXED = 'FIXED'
+}
+
+enum ActivityType {
+  LOGIN = 'LOGIN',
+  COURSE_VIEW = 'COURSE_VIEW',
+  LESSON_START = 'LESSON_START',
+  LESSON_COMPLETE = 'LESSON_COMPLETE',
+  COURSE_PURCHASE = 'COURSE_PURCHASE',
+  COURSE_COMPLETE = 'COURSE_COMPLETE',
+  CERTIFICATE_DOWNLOAD = 'CERTIFICATE_DOWNLOAD'
+}
