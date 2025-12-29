@@ -21,6 +21,7 @@ import (
 	"github.com/kaka/kodeakademia/be/internal/domain/repository"
 	repoimpl "github.com/kaka/kodeakademia/be/internal/repository"
 	"github.com/kaka/kodeakademia/be/internal/usecase"
+	httproutes "github.com/kaka/kodeakademia/be/internal/transport/http"
 )
 
 func main() {
@@ -44,6 +45,9 @@ func main() {
 
 	// --- Echo ---
 	e := echo.New()
+
+	// Register course routes
+	httproutes.RegisterCourseRoutes(e, db)
 
 	e.GET("/health", func(c echo.Context) error {
 		return c.String(http.StatusOK, "ok")
